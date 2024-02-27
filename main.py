@@ -3,7 +3,7 @@ import os
 import csv
 import requests
 #from bs4 import BeautifulSoup
-from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -63,19 +63,31 @@ def get_data(driver):
         return None
     try:
         WebDriverWait(driver, 10).until(
-            lambda s: s.find_element(By.TAG_NAME, "button").is_displayed())
-        driver.find_element(By.TAG_NAME, "button").click()
+            lambda s: s.find_element(By.XPATH, "/html/body/div[2]/div/div[6]/button[1]").is_displayed())
+        driver.find_element(By.XPATH, "/html/body/div[2]/div/div[6]/button[1]").click()
     except TimeoutException:
         print("No ok button")        
     return driver
 
-def save_video(driver, filename):
+def extract_vod_url(response_text):
+    # Find all URLs in the response text
+    urls = re.findall(r'(https?://\S+)', response_text)
+    
+    # Check each URL for the pattern
+    for url in urls:
+        match = re.search(r'\d+vod-.+?\.mp4', url)
+        if match:
+            # Extract the relevant part of the URL after removing the initial number
+            cleaned_url = re.sub(r'\d+', '', match.group())
+            return cleaned_url
+    
+    # If no matching URL found, return None
+    return None
 
-    #video_element = driver.find_element(By.CLASS_NAME, "video-responsive")  # get the video element
-    video_url = driver.find_element(By.XPATH ,'//*[@id="lesson"]/iframe').get_attribute('src')
+def save_video(driver, filename, video_url):
     cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
-    r = requests.get(video_url, cookies=cookies, stream=True)
-    with open(f"{filename}.mp4", 'wb') as f:
+    r = requests.get(video_url, cookies=cookies, stream=True)     
+    with open(f"{filename}", 'wb') as f:
         for chunk in r.iter_content(chunk_size=1024*1024):
             if chunk:
                 f.write(chunk)
@@ -83,4 +95,14 @@ if __name__ == '__main__':
     driver = configure_driver()
     get_data(driver)
     input("Play a video")
-    save_video(driver, "teste")
+    cleaned_url = None
+    for request in driver.requests:
+        if request.response:
+            url = request.url
+            match = re.search(r'\d+vod-.+?video.+?\.mp4', url)
+            if match:
+                cleaned_url = "https://{}".format(re.sub(r'\d+(?=vod-)', '', match.group()))
+                break   
+            
+    if cleaned_url:
+        save_video(driver, "video.mp4", cleaned_url)
