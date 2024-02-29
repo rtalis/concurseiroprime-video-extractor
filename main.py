@@ -68,41 +68,62 @@ def get_data(driver):
     except TimeoutException:
         print("No ok button")        
     return driver
-
-def extract_vod_url(response_text):
-    # Find all URLs in the response text
-    urls = re.findall(r'(https?://\S+)', response_text)
+def join_audio_video(audio_file, video_file, output_file):
+    cmd = f'ffmpeg -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac -strict experimental "{output_file}"'
+    os.system(cmd)
     
-    # Check each URL for the pattern
-    for url in urls:
-        match = re.search(r'\d+vod-.+?\.mp4', url)
-        if match:
-            # Extract the relevant part of the URL after removing the initial number
-            cleaned_url = re.sub(r'\d+', '', match.group())
-            return cleaned_url
-    
-    # If no matching URL found, return None
-    return None
-
-def save_video(driver, filename, video_url):
+def save_file(driver, filename, url):
     cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
-    r = requests.get(video_url, cookies=cookies, stream=True)     
-    with open(f"{filename}", 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024*1024):
+    r = requests.get(url, cookies=cookies, stream=True)     
+    total_size = int(r.headers.get('content-length', 0))
+    bytes_written = 0
+    chunk_size = 1024 * 1024
+    with open(filename, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=chunk_size):
             if chunk:
                 f.write(chunk)
+                bytes_written += len(chunk)
+                progress = min(100, int(bytes_written / total_size * 100))
+                print(f"\rDownloading {filename}: [{'#' * int(progress / 2):50s}] {progress}% ", end="", flush=True)
+    print("\nDownload completed.")
+    
 if __name__ == '__main__':
+    id_list = []
     driver = configure_driver()
     get_data(driver)
     input("Play a video")
-    cleaned_url = None
-    for request in driver.requests:
-        if request.response:
-            url = request.url
-            match = re.search(r'\d+vod-.+?video.+?\.mp4', url)
-            if match:
-                cleaned_url = "https://{}".format(re.sub(r'\d+(?=vod-)', '', match.group()))
-                break   
+    cleaned_video_url = None
+    cleaned_audio_url = None
+    while (True):
+        for request in driver.requests:
+            if request.response:
+                url = request.url
+                videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)
+                audiomatch = re.search(r'https://.*?/audio/.*?\.mp4', url)
+                if audiomatch and not cleaned_audio_url:
+                    cleaned_audio_url = audiomatch.group(0)
+                if videomatch:
+                    cleaned_video_url = videomatch.group(0)
+                    id = cleaned_video_url.rsplit('/', 1)[-1]
+                    print("url: ", cleaned_video_url)
+                    if id not in id_list:
+                        id_list.append(id)                        
+                    if id_list.index(id) >= 1:
+                        print(id_list)
+                        cleaned_video_url = videomatch.group(0)                        
+                        break
+        cont = input("Continue?")
+        if cont == "no":
+            break
+        down = input("Download?")
+        if down == "yes":
+            save_file(driver, "video.mp4", cleaned_video_url)
+            save_file(driver, "audio.mp4", cleaned_audio_url)
+            join_audio_video("audio.mp4", "video.mp4", "output.mp4")
             
-    if cleaned_url:
-        save_video(driver, "video.mp4", cleaned_url)
+            # Delete the separated audio and video files
+            os.remove("audio.mp4")
+            os.remove("video.mp4")
+            
+    if cleaned_video_url:
+        save_file(driver, "video.mp4", cleaned_video_url)
