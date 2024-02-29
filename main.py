@@ -125,6 +125,7 @@ def get_requests(driver, url):
     # Print all found links
     for link in lesson_links:
         print(link)
+        #TODO: navegar para cada um dos links e clicar no conteudo que contem 'parte' no texto
     return response
 
 if __name__ == '__main__':
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     get_data(driver)
     input("Play a video")    
     current_url = driver.current_url
-    requests = get_requests(current_url)
+    requests = get_requests(driver, current_url)
     
     video_link = get_video_link(driver)
     audio_link = get_audio_link(driver)
