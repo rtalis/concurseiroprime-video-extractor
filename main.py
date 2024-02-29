@@ -2,7 +2,7 @@ import re
 import os
 import csv
 import requests
-#from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
@@ -86,44 +86,62 @@ def save_file(driver, filename, url):
                 progress = min(100, int(bytes_written / total_size * 100))
                 print(f"\rDownloading {filename}: [{'#' * int(progress / 2):50s}] {progress}% ", end="", flush=True)
     print("\nDownload completed.")
-    
-if __name__ == '__main__':
-    id_list = []
-    driver = configure_driver()
-    get_data(driver)
-    input("Play a video")
-    cleaned_video_url = None
+
+def get_audio_link(driver):
     cleaned_audio_url = None
-    while (True):
-        for request in driver.requests:
+    for request in driver.requests:
             if request.response:
                 url = request.url
-                videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)
                 audiomatch = re.search(r'https://.*?/audio/.*?\.mp4', url)
                 if audiomatch and not cleaned_audio_url:
                     cleaned_audio_url = audiomatch.group(0)
+                    return cleaned_audio_url
+def get_video_link(driver):
+    cleaned_video_url = None
+    for request in driver.requests:
+            if request.response:
+                url = request.url
+                videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)               
                 if videomatch:
                     cleaned_video_url = videomatch.group(0)
                     id = cleaned_video_url.rsplit('/', 1)[-1]
                     print("url: ", cleaned_video_url)
                     if id not in id_list:
                         id_list.append(id)                        
-                    if id_list.index(id) >= 1:
+                    if id_list.index(id) >= 1: #the second link is usually a higher quality
                         print(id_list)
-                        cleaned_video_url = videomatch.group(0)                        
-                        break
-        cont = input("Continue?")
-        if cont == "no":
-            break
-        down = input("Download?")
-        if down == "yes":
-            save_file(driver, "video.mp4", cleaned_video_url)
-            save_file(driver, "audio.mp4", cleaned_audio_url)
-            join_audio_video("audio.mp4", "video.mp4", "output.mp4")
+                        cleaned_video_url = videomatch.group(0)
+                        return cleaned_video_url
+
+def get_requests(driver, url):
+    cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
+    response = requests.get(url, cookies=cookies)
+   
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+# Find all links containing the term 'lesson'
+    lesson_links = [link.get('href') for link in soup.find_all('a') if 'lesson' in link.get('href', '')]
+
+    # Print all found links
+    for link in lesson_links:
+        print(link)
+    return response
+
+if __name__ == '__main__':
+    id_list = []
+    driver = configure_driver()
+    get_data(driver)
+    input("Play a video")    
+    current_url = driver.current_url
+    requests = get_requests(current_url)
+    
+    video_link = get_video_link(driver)
+    audio_link = get_audio_link(driver)
+    save_file(driver, "video.mp4", video_link)
+    save_file(driver, "audio.mp4", audio_link)
+    join_audio_video("audio.mp4", "video.mp4", "output.mp4")
             
             # Delete the separated audio and video files
-            os.remove("audio.mp4")
-            os.remove("video.mp4")
-            
-    if cleaned_video_url:
-        save_file(driver, "video.mp4", cleaned_video_url)
+    os.remove("audio.mp4")
+    os.remove("video.mp4")
+
