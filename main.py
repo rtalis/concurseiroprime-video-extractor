@@ -1,6 +1,7 @@
 import re
 import os
-import csv
+import time
+from pytube import YouTube
 import requests
 from bs4 import BeautifulSoup
 from seleniumwire import webdriver
@@ -12,13 +13,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from urllib.parse import urlparse
 
 
-#EMAIL = input("Trei.no E-mail: ")
-#PASSWD = input("Trei.no Password: ")
+#EMAIL = input("E-mail: ")
+#PASSWD = input("Password: ")
 
 EMAIL = os.getenv("email")
 PASSWD = os.getenv("password")
+MAIN_URL = "https://ead.concurseiroprime.com.br"
 
 def configure_driver():
     chrome_options = Options()
@@ -29,12 +32,13 @@ def configure_driver():
             service=Service(ChromeDriverManager().install()), options=chrome_options)
     else:
         driver = webdriver.Chrome(options = chrome_options)
+    print("Driver started succefully")
     return driver
 
 
 def get_data(driver):
 
-    driver.get("https://ead.concurseiroprime.com.br")
+    driver.get(MAIN_URL)
     try:
         WebDriverWait(driver, 10).until(
             lambda s: s.find_element(By.XPATH, "/html/body/div[1]/header/div/div/div[2]/div[2]/div/ul/li/button").is_displayed())
@@ -49,12 +53,15 @@ def get_data(driver):
             lambda s: s.find_element(By.NAME, "password").is_displayed())
         pw_field = driver.find_element(By.NAME, "password")
         pw_field.send_keys(PASSWD, Keys.ENTER)
+        print("Logging in")
+
     except TimeoutException:
         print("TimeoutException: Element not found")
         return None
     try:
         WebDriverWait(driver, 10).until(
             lambda s: s.find_element(By.PARTIAL_LINK_TEXT, "Brasil").is_displayed())
+        print("Found course with 'Brasil' term")
         driver.find_element(By.PARTIAL_LINK_TEXT, "Brasil").click()
         
 
@@ -68,6 +75,17 @@ def get_data(driver):
     except TimeoutException:
         print("No ok button")        
     return driver
+
+def create_directory(url):
+    parsed_url = urlparse(url)
+    path_segments = parsed_url.path.split('/')[1:]
+    base_dir = "downloaded_videos"
+    full_path = os.path.join(base_dir, *path_segments)
+    if not os.path.exists(full_path):
+        os.makedirs(full_path)
+    return full_path
+
+
 def join_audio_video(audio_file, video_file, output_file):
     cmd = f'ffmpeg -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac -strict experimental "{output_file}"'
     os.system(cmd)
@@ -97,10 +115,17 @@ def get_audio_link(driver):
                     cleaned_audio_url = audiomatch.group(0)
                     return cleaned_audio_url
 def get_video_link(driver):
+    id_list = []
     cleaned_video_url = None
     for request in driver.requests:
             if request.response:
                 url = request.url
+                #check for videos stored in youtube 
+                youtube_match = re.search(r'https://www\.youtube\.com/embed/[^"\']+', url)
+                if youtube_match:
+                    youtube_url = youtube_match.group(0)
+                    return youtube_url
+                
                 videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)               
                 if videomatch:
                     cleaned_video_url = videomatch.group(0)
@@ -113,36 +138,76 @@ def get_video_link(driver):
                         cleaned_video_url = videomatch.group(0)
                         return cleaned_video_url
 
-def get_requests(driver, url):
+def get_lessons(driver, url):
     cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
-    response = requests.get(url, cookies=cookies)
-   
+    response = requests.get(url, cookies=cookies)   
     soup = BeautifulSoup(response.text, 'html.parser')
-
-# Find all links containing the term 'lesson'
     lesson_links = [link.get('href') for link in soup.find_all('a') if 'lesson' in link.get('href', '')]
+    return lesson_links
 
-    # Print all found links
-    for link in lesson_links:
-        print(link)
-        #TODO: navegar para cada um dos links e clicar no conteudo que contem 'parte' no texto
-    return response
+def download_youtube_videos(url, directory):
+    try:
+        yt = YouTube(url)
+        stream = yt.streams.get_by_resolution("720p")
+        print(f"Downloading {yt.title}...")
+        stream.download(output_path=directory, filename=yt.title.replace('/', '_') + '.mp4')  # Specify your path
+        print(f"Download completed: {yt.title}")
+        return yt.title + '.mp4'  # or return the path to the downloaded video
+    except Exception as e:
+        print(f"Failed to download YouTube video: {e}")
+        return None
+    
+def save_lesson(driver, directory, part_number):
+    filename = f"parte {part_number}.mp4"
+    filepath = os.path.join(directory, filename)
+    print(f"Saving video to: {filepath}")
+    video_link = get_video_link(driver)
+    
+    if video_link: 
+        if video_link.__contains__("youtube"):
+            download_youtube_videos(video_link, directory)
+            #print('youtube video....')
+        else:
+            audio_link = get_audio_link(driver)
+            if os.path.exists(filepath):
+                print(f"File already found: {filepath}, skipping...")
+                return
+            save_file(driver, "video.mp4", video_link)
+            save_file(driver, "audio.mp4", audio_link)
+            join_audio_video("audio.mp4", "video.mp4", filepath)
+            os.remove("audio.mp4")
+            os.remove("video.mp4")
+    else:
+        print(f"error download {directory}/parte-{part_number}")
+
+def get_part_lesson(driver, url):
+    i = 1
+    driver.get(url)
+    
+    while (True):
+        try:
+            #driver.get(url)
+            WebDriverWait(driver, 10).until(
+                    lambda s: s.find_element(By.XPATH, f"//*[@data-part-order='{i}']").is_displayed())
+            actions = ActionChains(driver)
+            directory = create_directory(url)
+            actions.move_to_element(driver.find_element(By.XPATH, f"//*[@data-part-order='{i}']")).click().perform()
+            time.sleep(10)
+            save_lesson(driver, directory, i)
+            del driver.requests          
+            i = i + 1
+            
+        except TimeoutException:
+            print("Finished parts")            
+            break
 
 if __name__ == '__main__':
-    id_list = []
     driver = configure_driver()
     get_data(driver)
-    input("Play a video")    
+    #input("Enter to continue")    
     current_url = driver.current_url
-    requests = get_requests(driver, current_url)
+    lessons = get_lessons(driver, current_url)
+    for lesson in lessons:
+        get_part_lesson(driver, f"{MAIN_URL}{lesson}")
     
-    video_link = get_video_link(driver)
-    audio_link = get_audio_link(driver)
-    save_file(driver, "video.mp4", video_link)
-    save_file(driver, "audio.mp4", audio_link)
-    join_audio_video("audio.mp4", "video.mp4", "output.mp4")
-            
-            # Delete the separated audio and video files
-    os.remove("audio.mp4")
-    os.remove("video.mp4")
 
