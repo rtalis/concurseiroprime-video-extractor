@@ -2,6 +2,7 @@ import re
 import os
 import time
 from pytube import YouTube
+from glob import glob, escape
 import requests
 from bs4 import BeautifulSoup
 from seleniumwire import webdriver
@@ -22,10 +23,17 @@ from urllib.parse import urlparse
 EMAIL = os.getenv("email")
 PASSWD = os.getenv("password")
 MAIN_URL = "https://ead.concurseiroprime.com.br"
+COURSE_NAME = "Brasil"
+DOWNLOAD_DIR = "downloaded_videos"
+COOLDOWN_TIME = 10
 
+total_video_counter = 0
+downloaded_video_counter = 0
+skip_cooldown = False
 def configure_driver():
     chrome_options = Options()
     chrome_options.add_argument("--window-size=1366,768")
+    chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
     #chrome_options.add_argument("--headless")
     if os.name == 'nt':
         driver = webdriver.Chrome(
@@ -40,16 +48,16 @@ def get_data(driver):
 
     driver.get(MAIN_URL)
     try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, COOLDOWN_TIME).until(
             lambda s: s.find_element(By.XPATH, "/html/body/div[1]/header/div/div/div[2]/div[2]/div/ul/li/button").is_displayed())
         
         log_page_button = driver.find_element(By.XPATH, "/html/body/div[1]/header/div/div/div[2]/div[2]/div/ul/li/button")
         log_page_button.click()
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, COOLDOWN_TIME).until(
             lambda s: s.find_element(By.NAME, "email").is_displayed())
         email_field = driver.find_element(By.NAME, "email")           
         email_field.send_keys(EMAIL, Keys.ENTER)
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, COOLDOWN_TIME).until(
             lambda s: s.find_element(By.NAME, "password").is_displayed())
         pw_field = driver.find_element(By.NAME, "password")
         pw_field.send_keys(PASSWD, Keys.ENTER)
@@ -59,17 +67,17 @@ def get_data(driver):
         print("TimeoutException: Element not found")
         return None
     try:
-        WebDriverWait(driver, 10).until(
-            lambda s: s.find_element(By.PARTIAL_LINK_TEXT, "Brasil").is_displayed())
+        WebDriverWait(driver, COOLDOWN_TIME).until(
+            lambda s: s.find_element(By.PARTIAL_LINK_TEXT, COURSE_NAME).is_displayed())
         print("Found course with 'Brasil' term")
-        driver.find_element(By.PARTIAL_LINK_TEXT, "Brasil").click()
+        driver.find_element(By.PARTIAL_LINK_TEXT, COURSE_NAME).click()
         
 
     except TimeoutException:
         driver.close()
         return None
     try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, COOLDOWN_TIME).until(
             lambda s: s.find_element(By.XPATH, "/html/body/div[2]/div/div[6]/button[1]").is_displayed())
         driver.find_element(By.XPATH, "/html/body/div[2]/div/div[6]/button[1]").click()
     except TimeoutException:
@@ -79,7 +87,7 @@ def get_data(driver):
 def create_directory(url):
     parsed_url = urlparse(url)
     path_segments = parsed_url.path.split('/')[1:]
-    base_dir = "downloaded_videos"
+    base_dir = DOWNLOAD_DIR
     full_path = os.path.join(base_dir, *path_segments)
     if not os.path.exists(full_path):
         os.makedirs(full_path)
@@ -135,6 +143,7 @@ def get_video_link(driver):
                     if id_list.index(id) >= 1: #the second link is usually a higher quality
                         cleaned_video_url = videomatch.group(0)
                         return cleaned_video_url
+    return cleaned_video_url
 
 def get_lessons(driver, url):
     cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
@@ -154,14 +163,29 @@ def download_youtube_videos(url, directory):
     except Exception as e:
         print(f"Failed to download YouTube video: {e}")
         return None
-    
+def get_file_count(directory: str) -> int:
+    count = 0
+    for filename in glob(os.path.join(escape(directory), '*')):
+        if os.path.isdir(filename):
+            count += get_file_count(filename)
+        else:
+            count += 1
+    return count
+
+
 def save_lesson(driver, directory, part_number):
+    global total_video_counter
+    global downloaded_video_counter
     filename = f"parte {part_number}.mp4"
     filepath = os.path.join(directory, filename)
     print(f"Saving video to: {filepath}")
     video_link = get_video_link(driver)
     
     if video_link: 
+        downloaded_video_counter = downloaded_video_counter + 1
+        if part_number > 1:
+            total_video_counter = total_video_counter + 1
+        print(f"Trying to download video {downloaded_video_counter} of {total_video_counter}")
         if video_link.__contains__("youtube"):
             download_youtube_videos(video_link, directory)
             #print('youtube video....')
@@ -185,30 +209,33 @@ def get_part_lesson(driver, url):
     while (True):
         try:
             #driver.get(url)
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, COOLDOWN_TIME).until(
                     lambda s: s.find_element(By.XPATH, f"//*[@data-part-order='{i}']").is_displayed())
             actions = ActionChains(driver)
             directory = create_directory(url)
             actions.move_to_element(driver.find_element(By.XPATH, f"//*[@data-part-order='{i}']")).click().perform()
-            print("wait 10s for the page to load...")
-            time.sleep(10)
+            print(f"wait {COOLDOWN_TIME}s for the page to load...")
+            time.sleep(COOLDOWN_TIME)
             save_lesson(driver, directory, i)
             del driver.requests          
             i = i + 1
             
         except TimeoutException:
-            print("Finished parts")            
+            print("Lesson downloaded")            
             break
 
 if __name__ == '__main__':
     driver = configure_driver()
     get_data(driver)
-    #input("Enter to continue")    
+    input("Enter to continue")    
     current_url = driver.current_url
     lessons = get_lessons(driver, current_url)
-    print(f"{len(lessons)} lessons found")
+    no_lessons = len(lessons)
+    print(f"{no_lessons} lessons found in {COURSE_NAME} course")
+    print(f"{get_file_count(DOWNLOAD_DIR)} files already found in {DOWNLOAD_DIR} folder")    
+    total_video_counter = no_lessons
     for lesson in lessons:
-        
+        print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
         get_part_lesson(driver, f"{MAIN_URL}{lesson}")
     
 

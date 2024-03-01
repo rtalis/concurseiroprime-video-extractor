@@ -1,6 +1,10 @@
-# Video Downloader for E-Learning Platform
+# Video Downloader for E-Learning brazilian Platform
 
-This project provides a Python script for downloading videos from a specific e-learning platform. It supports downloading regular video files and videos embedded from YouTube. The script automates the process of logging into the platform, navigating through course materials, and saving videos locally for offline access. Additionally, it handles video and audio streams separately, merging them into a single file where necessary.
+This project provides a Python script for downloading videos from a specific e-learning brazilian platform. It supports downloading video files from securely embedded vimeo and videos embedded from YouTube. The script automates the process of logging into the platform, navigating through course materials, and saving videos locally for offline access. Additionally, it handles video and audio streams separately, merging them into a single file where necessary.
+
+The main reason for this code is to help other pleople with examples of capturing streaming videos with selenium
+and other web scrapping techniques. This is an quick and dirty code, done in a couple of spare hours for practice
+and for learning. 
 
 ## Features
 
@@ -25,38 +29,37 @@ To set up the project environment:
 
 1. Clone the repository to your local machine:
 
-```   git clone https://github.com/yourusername/yourprojectname.git```
+    `git clone https://github.com/rtalis/yourprojectname.git`
 
-Navigate to the project directory:
+2. Navigate to the project directory:
+
+    `cd yourprojectname`
+
+3. Install the required Python packages:
 
 
+    `pip install -r requirements.txt`
 
-cd yourprojectname
-
-    Install the required Python packages:
-
-bash
-
-pip install -r requirements.txt
-
-Usage
+## Usage
 
 To use the video downloader, follow these steps:
 
-    Set your environment variables for EMAIL and PASSWORD to log into the e-learning platform securely:
+1. Set your environment variables for EMAIL and PASSWORD to log into the e-learning platform securely:
 
-bash
+    `export email='your_email@example.com'`
+    `export password='yourpassword'`
 
-export email='your_email@example.com'
-export password='yourpassword'
+2. Set up the variables on the beginning of the script:
 
-    Run the script:
+    `COURSE_NAME = "YOUR_COURSE"`
 
-bash
+    `...`
 
-python downloader.py
+3. Run the script:
 
-    Follow the on-screen instructions to select and download videos.
+    `python3 main.py`
+
+The script will start downloading automatically, checking for pree
 
 Contributing
 
