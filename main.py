@@ -130,11 +130,9 @@ def get_video_link(driver):
                 if videomatch:
                     cleaned_video_url = videomatch.group(0)
                     id = cleaned_video_url.rsplit('/', 1)[-1]
-                    print("url: ", cleaned_video_url)
                     if id not in id_list:
                         id_list.append(id)                        
                     if id_list.index(id) >= 1: #the second link is usually a higher quality
-                        print(id_list)
                         cleaned_video_url = videomatch.group(0)
                         return cleaned_video_url
 
@@ -192,6 +190,7 @@ def get_part_lesson(driver, url):
             actions = ActionChains(driver)
             directory = create_directory(url)
             actions.move_to_element(driver.find_element(By.XPATH, f"//*[@data-part-order='{i}']")).click().perform()
+            print("wait 10s for the page to load...")
             time.sleep(10)
             save_lesson(driver, directory, i)
             del driver.requests          
@@ -207,7 +206,9 @@ if __name__ == '__main__':
     #input("Enter to continue")    
     current_url = driver.current_url
     lessons = get_lessons(driver, current_url)
+    print(f"{len(lessons)} lessons found")
     for lesson in lessons:
+        
         get_part_lesson(driver, f"{MAIN_URL}{lesson}")
     
 
