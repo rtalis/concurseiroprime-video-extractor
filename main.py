@@ -34,7 +34,7 @@ def configure_driver():
     chrome_options = Options()
     chrome_options.add_argument("--window-size=1366,768")
     chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
-    chrome_options.add_arguments("--disable-gpu")
+    chrome_options.add_argument("--disable-gpu")
     #chrome_options.add_argument("--headless")
     if os.name == 'nt':
         driver = webdriver.Chrome(
@@ -126,6 +126,7 @@ def get_audio_link(driver):
 def get_video_link(driver):
     id_list = []
     cleaned_video_url = None
+    m4s_link = None
     for request in driver.requests:
             if request.response:
                 url = request.url
@@ -136,15 +137,22 @@ def get_video_link(driver):
                     return youtube_url
                 
                 videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)   
-                #videomatch = re.search(r'https://.*?/video/.*?\.(mp4|m4s)', url)            
+                #TODO add suport for m4s download links
+                #m4smatch = re.search(r'https://.*?/video/.*?\.m4s', url) 
+                #if not m4s_link and m4smatch:
+                #    m4s_link = m4smatch.group(0)        
                 if videomatch:
                     cleaned_video_url = videomatch.group(0)
                     id = cleaned_video_url.rsplit('/', 1)[-1]
                     if id not in id_list:
                         id_list.append(id)                        
-                    if id_list.index(id) >= 1 or cleaned_video_url.__contains__('m4s'): #the second link is usually a higher quality
+                    if id_list.index(id) >= 1: #the second link is usually a higher quality
                         cleaned_video_url = videomatch.group(0)
                         return cleaned_video_url
+                    
+    #if not cleaned_video_url:
+    #    cleaned_video_url = m4s_link
+
     return cleaned_video_url
 
 def get_lessons(driver, url):
@@ -258,8 +266,8 @@ def download_in_mode(mode):
                 print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
                 get_part_lesson(driver, f"{MAIN_URL}{lesson}")        
         driver.close()    
-    except:
-        print(f"error in {mode} download")       
+    except RuntimeError as e:
+        print(f"error in {mode} download; {e}")       
 
 
 if __name__ == '__main__':
