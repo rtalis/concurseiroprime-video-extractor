@@ -214,37 +214,40 @@ def save_lesson(driver, directory, part_number):
 
 def get_part_lesson(driver, url):
     i = 1
-    driver.get(url)
+    try:
+        driver.get(url)
     
-    while (True):
-        try:
-            #driver.get(url)
-            WebDriverWait(driver, COOLDOWN_TIME).until(
-                    lambda s: s.find_element(By.XPATH, f"//*[@data-part-order='{i}']").is_displayed())
-            actions = ActionChains(driver)
-            directory = create_directory(url)
-            actions.move_to_element(driver.find_element(By.XPATH, f"//*[@data-part-order='{i}']")).click().perform()
-            print(f"wait {COOLDOWN_TIME}s for the page to load...")
-            time.sleep(COOLDOWN_TIME)
-            save_lesson(driver, directory, i)
-            del driver.requests          
-            i = i + 1
-            
-        except TimeoutException:
-            print("Lesson downloaded")            
-            break
-        
+        while (True):
+            try:
+                #driver.get(url)
+                WebDriverWait(driver, COOLDOWN_TIME).until(
+                        lambda s: s.find_element(By.XPATH, f"//*[@data-part-order='{i}']").is_displayed())
+                actions = ActionChains(driver)
+                directory = create_directory(url)
+                actions.move_to_element(driver.find_element(By.XPATH, f"//*[@data-part-order='{i}']")).click().perform()
+                print(f"wait {COOLDOWN_TIME}s for the page to load...")
+                time.sleep(COOLDOWN_TIME)
+                save_lesson(driver, directory, i)
+                del driver.requests          
+                i = i + 1
+                
+            except TimeoutException:
+                print("Lesson downloaded")            
+                break
+    except:
+        print(f"Error getting lesson {url}")
 def download_in_mode(mode):
     try:
         global total_video_counter
         driver = configure_driver()
         get_data(driver)
         current_url = driver.current_url
+        file_count = get_file_count(DOWNLOAD_DIR)
         lessons = get_lessons(driver, current_url)
         no_lessons = len(lessons)
-        total_video_counter = no_lessons
+        total_video_counter = no_lessons + file_count
         print(f"{no_lessons} lessons found in {COURSE_NAME} course")
-        print(f"{get_file_count(DOWNLOAD_DIR)} files already found in {DOWNLOAD_DIR} folder")
+        print(f"{file_count} files already found in {DOWNLOAD_DIR} folder")
         
         if mode == 'skipping':    
             for lesson in lessons:
