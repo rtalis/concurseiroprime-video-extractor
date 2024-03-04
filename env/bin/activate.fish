@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/home/talison/dev/python/prime-extractor/env"
+set -gx VIRTUAL_ENV "/home/talison/dev/python/concurseiroprime-video-extractor/env"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

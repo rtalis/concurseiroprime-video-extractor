@@ -34,6 +34,7 @@ def configure_driver():
     chrome_options = Options()
     chrome_options.add_argument("--window-size=1366,768")
     chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
+    chrome_options.add_arguments("--disable-gpu")
     #chrome_options.add_argument("--headless")
     if os.name == 'nt':
         driver = webdriver.Chrome(
@@ -134,13 +135,14 @@ def get_video_link(driver):
                     youtube_url = youtube_match.group(0)
                     return youtube_url
                 
-                videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)               
+                videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)   
+                #videomatch = re.search(r'https://.*?/video/.*?\.(mp4|m4s)', url)            
                 if videomatch:
                     cleaned_video_url = videomatch.group(0)
                     id = cleaned_video_url.rsplit('/', 1)[-1]
                     if id not in id_list:
                         id_list.append(id)                        
-                    if id_list.index(id) >= 1: #the second link is usually a higher quality
+                    if id_list.index(id) >= 1 or cleaned_video_url.__contains__('m4s'): #the second link is usually a higher quality
                         cleaned_video_url = videomatch.group(0)
                         return cleaned_video_url
     return cleaned_video_url
@@ -223,19 +225,46 @@ def get_part_lesson(driver, url):
         except TimeoutException:
             print("Lesson downloaded")            
             break
+        
+def download_in_mode(mode):
+    try:
+        global total_video_counter
+        driver = configure_driver()
+        get_data(driver)
+        current_url = driver.current_url
+        lessons = get_lessons(driver, current_url)
+        no_lessons = len(lessons)
+        total_video_counter = no_lessons
+        print(f"{no_lessons} lessons found in {COURSE_NAME} course")
+        print(f"{get_file_count(DOWNLOAD_DIR)} files already found in {DOWNLOAD_DIR} folder")
+        
+        if mode == 'skipping':    
+            for lesson in lessons:
+                file_count = get_file_count(DOWNLOAD_DIR + lesson)
+                if (file_count > 0):
+                    print(f"Lesson {lessons.index(lesson)} already partial or completely downloaded. Skipping...")
+                else:
+                    print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
+                    get_part_lesson(driver, f"{MAIN_URL}{lesson}")
+        if mode == 'reverse':
+            lessons.reverse()  
+            for lesson in lessons:
+                print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
+                get_part_lesson(driver, f"{MAIN_URL}{lesson}")
+        if mode == 'random':
+            import random
+            random.shuffle(lessons)
+            for lesson in lessons:
+                print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
+                get_part_lesson(driver, f"{MAIN_URL}{lesson}")        
+        driver.close()    
+    except:
+        print(f"error in {mode} download")       
+
 
 if __name__ == '__main__':
-    driver = configure_driver()
-    get_data(driver)
-    input("Enter to continue")    
-    current_url = driver.current_url
-    lessons = get_lessons(driver, current_url)
-    no_lessons = len(lessons)
-    print(f"{no_lessons} lessons found in {COURSE_NAME} course")
-    print(f"{get_file_count(DOWNLOAD_DIR)} files already found in {DOWNLOAD_DIR} folder")    
-    total_video_counter = no_lessons
-    for lesson in lessons:
-        print(f"lesson {lessons.index(lesson) + 1} of {no_lessons}")        
-        get_part_lesson(driver, f"{MAIN_URL}{lesson}")
-    
+    #download in multiple modes to ensure most of the lessons are downloaded before the session is closed. 
+    download_in_mode('skipping')
+    download_in_mode('reverse')
+    download_in_mode('random')
 

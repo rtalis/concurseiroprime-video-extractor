@@ -1,4 +1,4 @@
-#!/home/talison/dev/python/prime-extractor/env/bin/python3
+#!/home/talison/dev/python/concurseiroprime-video-extractor/env/bin/python3.11
 # -*- coding: utf-8 -*-
 import re
 import sys
