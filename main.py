@@ -137,7 +137,7 @@ def get_video_link(driver):
                     return youtube_url
                 
                 videomatch = re.search(r'https://.*?/video/.*?\.mp4', url)   
-                #TODO add suport for m4s download links
+                #TODO add support for m4s download links
                 #m4smatch = re.search(r'https://.*?/video/.*?\.m4s', url) 
                 #if not m4s_link and m4smatch:
                 #    m4s_link = m4smatch.group(0)        
@@ -239,13 +239,15 @@ def get_part_lesson(driver, url):
 def download_in_mode(mode):
     try:
         global total_video_counter
+        global downloaded_video_counter
         driver = configure_driver()
         get_data(driver)
         current_url = driver.current_url
         file_count = get_file_count(DOWNLOAD_DIR)
         lessons = get_lessons(driver, current_url)
         no_lessons = len(lessons)
-        total_video_counter = no_lessons + file_count
+        downloaded_video_counter = file_count
+        total_video_counter = no_lessons 
         print(f"{no_lessons} lessons found in {COURSE_NAME} course")
         print(f"{file_count} files already found in {DOWNLOAD_DIR} folder")
         
